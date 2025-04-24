@@ -64,7 +64,7 @@ export default function Documents({
     return (
         <div className="flex flex-col md:grid md:grid-cols-[max-content,auto] max-w-[100vw]">
             <div className="p-4">
-                <div className="grid lg:min-w-48">
+                <div className="grid gap-2 lg:min-w-48">
                     {models.map(({ name, category, icon }) => {
                         const selected = model == name
                         return (
@@ -73,8 +73,8 @@ export default function Documents({
                                 <button
                                     key={name}
                                     className={clsx(
-                                        'group font-semibold rounded-none border-0 text-neutral-500 hover:text-black',
-                                        selected && 'bg-blue-100 hover:bg-blue-200 !text-black'
+                                        'group font-semibold border-0 text-neutral-500 hover:text-black dark:hover:text-white dark:bg-transparent',
+                                        selected && 'bg-blue-100 dark:!bg-neutral-600 hover:bg-blue-200 !text-black dark:!text-blue-400'
                                     )}
                                     onClick={() => {
                                         setPrefix('')
@@ -90,15 +90,15 @@ export default function Documents({
                                     </span>
                                     <span>{name}</span>
                                 </button>
-                                {currentModel?.allowFolders !== false && selected && (
+                                {currentModel?.allowFolders !== false && selected && !!folders.length && (
                                     <div className="pl-4 overflow-y-auto max-h-80">
                                         {folders.map(folderName => {
                                             const selected = folderName === folder
                                             return (
                                                 <button
                                                     className={clsx(
-                                                        'w-full border-none rounded-none text-xs font-normal text-neutral-500 hover:text-black',
-                                                        selected && '!text-black bg-neutral-200'
+                                                        'w-full border-none text-xs font-normal text-neutral-500 hover:text-black dark:hover:text-white dark:bg-transparent',
+                                                        selected && '!text-black dark:!text-blue-400 !bg-neutral-200 dark:!bg-neutral-600'
                                                     )}
                                                     title={`Filter ${currentModel?.singularName} ${
                                                         currentModel?.folderAlias ?? 'folder'
@@ -176,7 +176,7 @@ export default function Documents({
                         </div>
                     </div>
 
-                    {!loading && documents.length === 0 && <div className='text-sm pl-2 text-neutral-500'>no results</div>}
+                    {!loading && documents.length === 0 && <div className="text-sm pl-2 text-neutral-500">no results</div>}
 
                     {!loading && documents.length > 0 && (
                         <div className="overflow-auto">
