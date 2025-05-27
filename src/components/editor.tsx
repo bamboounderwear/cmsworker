@@ -3,7 +3,7 @@ import { useDebouncedCallback } from 'use-debounce'
 import clsx from 'clsx'
 import { Model } from './app'
 import { client } from './app'
-import { LeftArrow, ServerIcon, DocumentCheckIcon, TrashIcon, FolderIcon, FileIcon, DuplicateIcon } from './icons'
+import { LeftArrow, ServerIcon, DocumentCheckIcon, TrashIcon, FileIcon, DuplicateIcon, LinkIcon } from './icons'
 import EditorFields from './editor-fields'
 import { vars as environment } from '../../wrangler.json'
 
@@ -21,15 +21,17 @@ export type ObjectSchema = {
     description?: string
     properties: Record<string, ReferenceSchema | PropertySchema>
     default?: any
+    heading?: string
 }
 
 export type StringSchema = {
     type: 'string'
     title?: string
     description?: string
-    format?: 'date-time' | 'markdown'
+    format?: 'date-time' | 'markdown' | `uri${string}`
     enum?: string[]
     default?: string
+    heading?: string
 }
 
 export type NumberSchema = {
@@ -37,6 +39,7 @@ export type NumberSchema = {
     title?: string
     description?: string
     default?: number
+    heading?: string
 }
 
 export type BooleanSchema = {
@@ -44,6 +47,7 @@ export type BooleanSchema = {
     title?: string
     description?: string
     default?: boolean
+    heading?: string
 }
 
 export type ArrayItemSchema =
@@ -61,28 +65,23 @@ export type ArraySchema = {
     title?: string
     description?: string
     items: ArrayItemSchema | { anyOf: ArrayItemSchema[] }
-    itemKey?: (value: any) => string
-    itemDescription?: (value: any) => string
     default?: any[]
+    heading?: string
+}
+
+const beforeUnload = e => {
+    e.preventDefault()
 }
 
 export default function Editor({
     model,
     setModel,
-    folders,
-    fetchFolders,
-    folder,
-    setFolder,
     name,
     setName,
     models,
 }: {
     model: string
     setModel: (value: string) => void
-    folders: string[]
-    fetchFolders: () => Promise<void>
-    folder: string
-    setFolder: (value: string) => void
     name: string
     setName: (value: string | undefined) => void
     models: Model[]
@@ -90,50 +89,72 @@ export default function Editor({
     const [loading, setLoading] = useState(false)
     const [document, setDocument] = useState<any>({})
     const [documentUpdated, setDocumentUpdated] = useState(false)
+    useEffect(() => {
+        if (documentUpdated) window.addEventListener('beforeunload', beforeUnload)
+        else window.removeEventListener('beforeunload', beforeUnload)
+    }, [documentUpdated])
+
     const [newName, setNewName] = useState<string | undefined>(name)
-    const [newFolder, setNewFolder] = useState<string>(folder)
     const [path, setPath] = useState<string[]>([])
 
     const documentModel = useMemo(() => models.find(({ name }) => name === model), [models, model])
+    const singleDocument = useMemo(() => documentModel?.allowList === false, [documentModel])
     const singularCapitalName = useMemo(() => {
         if (!documentModel?.singularName) return ''
         return `${documentModel.singularName.slice(0, 1).toUpperCase()}${documentModel.singularName.slice(1)}`
     }, [documentModel])
 
-    const leaveEditor = useCallback(() => {
-        if (!documentUpdated) {
-            setName(undefined)
-            setFolder('')
-        } else if (window.confirm('Discard changes?')) {
-            setName(undefined)
-            setFolder('')
+    const goBack = useCallback(() => {
+        if (path.length) {
+            const last = path.pop()
+            if (!isNaN(Number(last))) path.pop()
+            setPath([...path])
+            return
         }
-    }, [documentUpdated, setName, setFolder])
+
+        const leave = () => {
+            setName(undefined)
+            if (singleDocument) setModel(models[0]?.name ?? '')
+        }
+        if (!documentUpdated) return leave()
+        if (window.confirm('Discard changes?')) leave()
+    }, [path, setPath, documentUpdated, setName, singleDocument])
+    useEffect(() => {
+        window.cms.goBack = goBack
+    }, [goBack])
 
     const fetchDocument = useCallback(async () => {
         if (!name || documentModel?.allowGet === false) return
         setLoading(true)
+        let value
         try {
-            let value = await client.getDocument(model, folder, name)
+            value = (await client.getDocument(model, name)) ?? singleDocument ? {} : undefined
+            if (!singleDocument && !value) return goBack()
             if (documentModel?.afterGet) value = await documentModel.afterGet(value)
             setDocument(value)
-            setDocumentUpdated(false)
-            setLoading(false)
         } catch (e) {
-            console.error(e)
-            setName(undefined)
+            if (singleDocument) {
+                if (documentModel?.afterGet) value = await documentModel.afterGet(value)
+                setDocument({})
+            } else {
+                console.error(e)
+                setName(undefined)
+                goBack()
+            }
         }
-    }, [setLoading, setDocument, setName, name, model, documentModel])
+        setDocumentUpdated(false)
+        setLoading(false)
+    }, [setLoading, setDocument, setName, name, model, documentModel, goBack])
     useEffect(() => {
         fetchDocument()
         // @ts-ignore
         if (name === '') window.document.getElementById('document-name')?.focus()
     }, [])
     const saveDocument = useCallback(async () => {
-        if (!newName) return alert(`${documentModel?.singularName} name is required.`)
+        if (!newName) return alert(`${documentModel?.singularName} ${documentModel?.nameAlias ?? 'name'} is required.`)
         setLoading(true)
         try {
-            if (!(name === newName && folder === newFolder) && (await client.documentExists(model, newFolder, newName))) {
+            if (name !== newName && (await client.documentExists(model, newName))) {
                 if (documentModel?.allowUpdate === false) {
                     alert(`${singularCapitalName} already exists, cancelling.`)
                     return setLoading(false)
@@ -148,7 +169,6 @@ export default function Editor({
                           ...document,
                           _modified_at: undefined,
                           _model: model,
-                          _folder: newFolder,
                           _name: newName,
                       }
 
@@ -156,36 +176,34 @@ export default function Editor({
 
             await client.upsertDocument({
                 model,
-                folder: name ? folder : newFolder,
-                newFolder,
                 name: name || newName,
                 newName,
                 value,
             })
 
-            if (!folders.includes(newFolder)) fetchFolders()
-
             setDocumentUpdated(false)
             setName(newName)
-            setFolder(newFolder)
         } catch (e) {
             alert(`Failed to save ${documentModel?.singularName}.`)
             console.error(e)
         }
         setLoading(false)
-    }, [document, setDocumentUpdated, setLoading, name, setName, newName, documentModel, newFolder, folders, fetchFolders])
+    }, [document, setDocumentUpdated, setLoading, name, setName, newName, documentModel])
     const deleteDocument = useCallback(async () => {
         if (!window.confirm(`Delete ${documentModel?.singularName}?`)) return
         setLoading(true)
         try {
-            await client.deleteDocument(model, folder, name)
+            await client.deleteDocument(model, name)
+            if (document._files) {
+                for (const file of document._files) await client.deleteFile(file)
+            }
             setName(undefined)
         } catch (e) {
             alert(`Failed to delete ${documentModel?.singularName}.`)
             console.error(e)
         }
         setLoading(false)
-    }, [model, name, setLoading, documentModel])
+    }, [model, name, document, setLoading, documentModel])
 
     const [previewing, setPreviewing] = useState(false)
     const previewFrame = useRef(null)
@@ -198,13 +216,12 @@ export default function Editor({
                     ...document,
                     _modified_at: Math.floor(Date.now() / 1000),
                     _model: model,
-                    _folder: newFolder,
                     _name: newName,
                 })
-        }, [previewFrame, model, newName, document, newFolder]),
-        125
+        }, [previewFrame, model, newName, document]),
+        250
     )
-    useEffect(previewUpdate, [newName, previewFrame, previewing, document, newFolder])
+    useEffect(previewUpdate, [newName, previewFrame, previewing, document])
 
     return (
         <div className="flex flex-col lg:grid lg:grid-cols-[max-content,auto] min-h-full max-w-[100vw]">
@@ -212,7 +229,7 @@ export default function Editor({
             <div
                 className={clsx('p-4 flex justify-center', previewing && 'max-w-md border-b lg:border-b-0 lg:border-r border-neutral-300')}
             >
-                <div className={clsx('w-full flex flex-col gap-4 transition-[margin]', !previewing && 'lg:mx-[15%] 2xl:mx-[25%]')}>
+                <div className={clsx('w-full flex flex-col gap-4 transition-[padding]', !previewing && 'lg:px-[15%] 2xl:px-[25%]')}>
                     <div className={clsx('grid gap-4', !previewing && 'md:grid-cols-[auto,max-content]')}>
                         <div className="flex gap-2">
                             <button
@@ -226,7 +243,7 @@ export default function Editor({
                                         setPath([...path])
                                         return
                                     }
-                                    leaveEditor()
+                                    goBack()
                                 }}
                             >
                                 <LeftArrow />
@@ -246,7 +263,7 @@ export default function Editor({
                         </div>
 
                         <div className="flex flex-wrap gap-2 items-center">
-                            {documentModel?.allowCreate !== false && name && (
+                            {!singleDocument && documentModel?.allowCreate !== false && name && (
                                 <button
                                     onClick={() => {
                                         setName('')
@@ -259,7 +276,7 @@ export default function Editor({
                                     <DuplicateIcon />
                                 </button>
                             )}
-                            {documentModel?.allowDelete !== false && name && (
+                            {!singleDocument && documentModel?.allowDelete !== false && name && (
                                 <button
                                     disabled={DEMO}
                                     onClick={deleteDocument}
@@ -298,86 +315,34 @@ export default function Editor({
                             )}
                         </div>
                     </div>
-                    <div className="border-b border-b-neutral-300 pb-10 mb-4 flex flex-wrap gap-4 items-start">
-                        <label
-                            htmlFor="document-name"
-                            className={clsx('flex flex-col gap-2 cursor-pointer w-full', !previewing && 'md:w-[calc(50%-0.5rem)]')}
-                        >
-                            <span className="flex gap-2 items-center ml-2">
-                                <span className="text-neutral-400">
-                                    <FileIcon />
-                                </span>
-                                <span className="text-sm font-medium">{documentModel?.nameAlias ?? 'name'}</span>
-                                {name && name !== newName && <span className="text-xs text-neutral-400 font-normal">changed</span>}
-                            </span>
-                            <input
-                                id="document-name"
-                                value={newName}
-                                onChange={e => {
-                                    if (e.target.value !== newName) {
-                                        setNewName(e.target.value)
-                                        setDocumentUpdated(true)
-                                        previewUpdate()
-                                    }
-                                }}
-                                placeholder={`new ${documentModel?.singularName} ${documentModel?.nameAlias ?? 'name'}`}
-                                required
-                                title={`${singularCapitalName} ${documentModel?.nameAlias ?? 'name'}`}
-                                disabled={Boolean(name) && documentModel?.allowRename === false}
-                            />
-                        </label>
-                        {documentModel?.allowFolders !== false && (
+                    <div className="mb-4 flex flex-wrap gap-4 items-start">
+                        {!singleDocument && (
                             <label
-                                htmlFor="document-folder"
+                                htmlFor="document-name"
                                 className={clsx('flex flex-col gap-2 cursor-pointer w-full', !previewing && 'md:w-[calc(50%-0.5rem)]')}
                             >
                                 <span className="flex gap-2 items-center ml-2">
                                     <span className="text-neutral-400">
-                                        <FolderIcon />
+                                        <FileIcon />
                                     </span>
-                                    <span className="text-sm font-medium">{documentModel?.folderAlias ?? 'folder'}</span>
-                                    {name && folder !== newFolder && <span className="text-xs text-neutral-400 font-normal">changed</span>}
+                                    <span className="text-sm font-medium">{documentModel?.nameAlias ?? 'name'}</span>
+                                    {name && name !== newName && <span className="text-xs text-neutral-400 font-normal">changed</span>}
                                 </span>
-                                <select
-                                    id="document-folder"
-                                    value={newFolder}
+                                <input
+                                    id="document-name"
+                                    value={newName}
                                     onChange={e => {
-                                        const newFolder = e.target.value
-
-                                        if (newFolder === '[new]') {
-                                            const newFolderName = prompt(`Enter new ${documentModel?.folderAlias ?? 'folder'} name:`)
-                                            if (newFolderName) {
-                                                setNewFolder(newFolderName)
-                                                setDocumentUpdated(true)
-                                            }
-                                        } else {
-                                            setNewFolder(newFolder)
+                                        if (e.target.value !== newName) {
+                                            setNewName(e.target.value)
                                             setDocumentUpdated(true)
+                                            previewUpdate()
                                         }
                                     }}
+                                    placeholder={`new ${documentModel?.singularName} ${documentModel?.nameAlias ?? 'name'}`}
                                     required
-                                    title={`${singularCapitalName} ${documentModel?.folderAlias ?? 'folder'}`}
-                                    disabled={documentModel?.allowRename}
-                                >
-                                    <option value="" selected={!newFolder}>
-                                        (none)
-                                    </option>
-                                    {documentModel?.allowCreateFolder !== false && (
-                                        <option value="[new]">+ new {documentModel?.folderAlias ?? 'folder'}</option>
-                                    )}
-                                    {newFolder && !folders.includes(newFolder) && (
-                                        <option key={newFolder} selected={true}>
-                                            {newFolder}
-                                        </option>
-                                    )}
-                                    {folders.map(folderName => {
-                                        return (
-                                            <option key={folderName} selected={newFolder === folderName}>
-                                                {folderName}
-                                            </option>
-                                        )
-                                    })}
-                                </select>
+                                    title={`${singularCapitalName} ${documentModel?.nameAlias ?? 'name'}`}
+                                    disabled={Boolean(name) && documentModel?.allowRename === false}
+                                />
                             </label>
                         )}
                     </div>
@@ -411,7 +376,6 @@ export default function Editor({
                             <documentModel.customEditor
                                 {...{
                                     model,
-                                    folder,
                                     name,
                                     setName,
                                     newName,
@@ -431,7 +395,6 @@ export default function Editor({
                             <EditorFields
                                 {...{
                                     model,
-                                    folder,
                                     name,
                                     setName,
                                     newName,

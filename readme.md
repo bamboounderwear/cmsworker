@@ -97,17 +97,3 @@ Deploy the CMS to production by running:
 ```bash
 npm run deploy
 ```
-
-## Feature Roadmap
-
--   [x] Dynamic model schema (accept schema generator function)
--   [x] Session device fingerprinting (IP + user agent hash)
--   [ ] Import/export CSV & JSON files within client
--   [ ] Document versions (change merging)
--   [ ] Caching (w/ invalidation)
--   [ ] User roles w/ granular permissions (including document versions)
--   [x] Rich text editor
--   [x] Custom mapped array item titles
--   [x] Folders
--   [x] Allow turning off creates, renames, updates & deletes within schema
--   [ ] Re-implement document references properly

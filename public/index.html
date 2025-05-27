@@ -3,20 +3,9 @@
     <head>
         <title>CMS Worker</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <script>
-            // Apply theme from local storage immediately
-            (function() {
-                const theme = localStorage.getItem('theme');
-                if (theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-                    document.documentElement.classList.add('dark');
-                } else {
-                    document.documentElement.classList.remove('dark');
-                }
-            })();
-        </script>
-        <script src="client.js"></script>
-        <link href="style.css" rel="stylesheet" />
-        <link href="client.css" rel="stylesheet" />
+        <script src="/client.js"></script>
+        <link href="/style.css" rel="stylesheet" />
+        <link href="/client.css" rel="stylesheet" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
         <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,100..900&display=swap" rel="stylesheet" />

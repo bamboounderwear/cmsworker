@@ -1,55 +1,58 @@
-import { D1Database, R2Bucket } from '@cloudflare/workers-types/experimental'
+import { D1Database, R2Bucket } from '@cloudflare/workers-types'
 import { Methods, Trouter } from 'trouter'
 import { parse } from 'cookie'
-import { Resend } from 'resend'
-import { documentsController, filesController, usersController } from './controllers/default'
+import { usersController } from './controllers/default'
+import addVerificationRoutes from './routes/verification'
+import addSessionsRoutes from './routes/sessions'
+import { addDocumentsRoutes } from './routes/documents'
+import addFilesRoutes from './routes/files'
+import { addSessionAuthentication, addTokenAuthentication } from './middleware/authentication'
+import { addBCAuthentication, addBCRoutes } from './plugins/big-commerce/server'
 
 export type Controller = {
     list?: (
         listParameters: {
             model: string
-            folder?: string
-            prefix?: string
+            search?: string
             limit: number
             after: any
         },
         parameters: Parameters
-    ) => Promise<{ results: { name: string; folder?: string; modified_at?: string }[]; last?: any }>
-    listFolders?: (
-        listParameters: {
-            model: string
-        },
-        parameters: Parameters
-    ) => Promise<string[]>
-    exists?: (existsParameters: { model: string; folder: string; name: string }, parameters: Parameters) => Promise<Boolean>
-    get?: (
-        getParameters: { model: string; folder?: string; name: string },
-        parameters: Parameters
-    ) => Promise<any | Response | undefined | null>
+    ) => Promise<{ results: { name: string; modified_at?: string } & any; last?: any }>
+    exists?: (existsParameters: { model: string; name: string }, parameters: Parameters) => Promise<Boolean>
+    get?: (getParameters: { model: string; name: string }, parameters: Parameters) => Promise<any | Response | undefined | null>
     put?: (
-        putParameters: { model: string; folder?: string; name: string; rename?: string; value: any; modified_by: string; move?: string },
+        putParameters: { model: string; name: string; rename?: string; value: any; modified_by: string; move?: string },
         parameters: Parameters
     ) => Promise<void | boolean>
-    delete?: (deleteParameters: { model: string; folder?: string; name: string }, parameters: Parameters) => Promise<void | boolean>
+    delete?: (deleteParameters: { model: string; name: string }, parameters: Parameters) => Promise<void | boolean>
 }
 
 /**
  * Use controllers to override default model behavior and integrate with external APIs
  */
-const controllers: Record<string, Controller> = {
-    documents: documentsController,
-    files: filesController,
+export const controllers: Record<string, Controller> = {
     users: usersController,
 }
+
+/**
+ * Use middleware to add behavior to all incoming requests (like custom authentication or request initialization)
+ */
+export const middleware: ((parameters: Parameters) => void | Promise<void>)[] = []
+
+addSessionAuthentication()
+addTokenAuthentication()
 
 type Environment = {
     DB: D1Database
     FILES: R2Bucket
     RESEND_KEY?: string
     DEMO?: boolean
+    ASSETS: any
+    [key: string]: any
 }
 
-type Parameters = {
+export type Parameters = {
     request: Request
     environment: Environment
     url: URL
@@ -58,10 +61,15 @@ type Parameters = {
     parameters: Record<string, string>
     body?: Record<string, any> | ReadableStream | null
     user: string | false
-    ip: string
+    cache: {
+        get: (key: string) => Promise<any | undefined>
+        put: (key: string, value: any) => Promise<boolean>
+        delete: (key: string) => Promise<boolean>
+    }
+    session?: string
+    token?: string
+    [key: string]: any
 }
-
-export type Endpoint = (parameters: Parameters) => Response | Promise<Response>
 
 export const responses = {
     badRequest: (message = '') => new Response(message, { status: 400 }),
@@ -74,216 +82,29 @@ export const responses = {
 }
 
 export const time = () => Math.floor(Date.now() / 1000)
-const router = new Trouter()
 
-// Verification
+/**
+ * Use router to create routes; add from most to least specific
+ */
+export const router = new Trouter()
 
-router.post(`/verification`, async (parameters: Parameters) => {
-    if (parameters.environment.DEMO) return responses.unauthorized
-    // @ts-ignore
-    const email = parameters?.body?.email
-    const now = time()
-    const verification = crypto
-        .getRandomValues(new Uint8Array(8))
-        .map(value => value % 10)
-        .join('')
-
-    await parameters.environment.DB.prepare(
-        'update users set verification = ?, verification_expires_at = ? where email = ? and (verification_expires_at is null or verification_expires_at <= ?)'
-    )
-        .bind(verification, now + 300, email, now)
-        .run()
-
-    if (parameters.environment.RESEND_KEY) {
-        const resend = new Resend(parameters.environment.RESEND_KEY)
-        const emailResult = await resend.emails.send({
-            from: 'develop@resend.dev',
-            to: email,
-            subject: 'CMS Verification Code',
-            text: `Verification code: ${verification}`,
-        })
-        if (emailResult.error) throw new Error(emailResult.error.message)
-    } else console.log('New user verification:', { email, verification })
-
-    return responses.noContent
-})
-
-// Sessions
-
-router.get(`/session`, async (parameters: Parameters) => {
-    if (!parameters.user) return responses.unauthorized
-    return responses.json({ email: parameters.user })
-})
-
-router.post(`/session`, async (parameters: Parameters) => {
-    // @ts-ignore
-    const email = parameters?.body?.email
-    // @ts-ignore
-    const verification = parameters?.body?.verification ?? ''
-    const now = time()
-
-    const existing = await parameters.environment.DB.prepare(
-        'select email from users where email = ? and verification = ? and verification_expires_at > ?'
-    )
-        .bind(email, verification, now)
-        .first<string>('email')
-
-    if (!existing) return responses.unauthorized
-
-    await parameters.environment.DB.prepare('delete from sessions where email = ? and expires_at < ?').bind(email, now).run()
-    const key = crypto.randomUUID()
-    const expires_at = now + 259200 // 3 days
-
-    await parameters.environment.DB.prepare('insert into sessions (key, email, expires_at) values (?, ?, ?)')
-        .bind(`${key}${parameters.ip}`, email, expires_at)
-        .run()
-    return new Response(undefined, { status: 201, headers: { 'set-cookie': `session=${key}; SameSite=Strict` } })
-})
-
-router.delete(`/session`, async (parameters: Parameters) => {
-    if (!parameters.user) return responses.unauthorized
-
-    const { session } = parse(parameters.headers?.cookie ?? '')
-    if (session)
-        return responses.success(
-            await parameters.environment.DB.prepare('delete from sessions where key = ?').bind(`${session}${parameters.ip}`).run()
-        )
-    return responses.badRequest()
-})
-
-// Documents
-
-router.head(`/:model`, async (parameters: Parameters) => {
-    if (!parameters.user) return responses.unauthorized
-
-    const model = parameters.parameters?.model
-    if (!model) return responses.notFound
-
-    const folder = parameters.queries?.folder ?? ''
-    const name = parameters.queries?.name
-    if (!name) return responses.badRequest(`'name' query parameter is required.`)
-
-    const controller = controllers[model] ?? controllers.documents
-    if (!controller.exists) throw new Error('Document exists not implemented.')
-    const result = await controller.exists({ model, folder, name }, parameters)
-
-    if (!result) return responses.notFound
-    return responses.noContent
-})
-
-router.get(`/:model`, async (parameters: Parameters) => {
-    if (!parameters.user) return responses.unauthorized
-    const model = parameters.parameters?.model
-    if (!model) return responses.notFound
-    const controller = controllers[model] ?? controllers.documents
-
-    // Get Single Document
-    if (parameters.queries?.name) {
-        const folder = parameters.queries?.folder ?? ''
-        const name = parameters.queries?.name
-        if (!name) return responses.badRequest(`'name' query parameter is required.`)
-
-        if (!controller.get) throw new Error('Get document not implemented.')
-        const result = await controller.get({ model, folder, name }, parameters)
-
-        if (result instanceof Response) return result
-        if (!result) return responses.notFound
-        return responses.json(result)
-    }
-
-    // List Documents
-    const folder = parameters.queries?.folder
-    const prefix = parameters.queries?.prefix
-    const limit = parameters.queries?.limit ? Number(parameters.queries.limit) : prefix ? 10 : 20
-    const after = parameters.queries?.after
-        ? isNaN(Number(parameters.queries.after))
-            ? parameters.queries.after
-            : Number(parameters.queries.after)
-        : undefined
-
-    if (!controller.list) throw new Error('List documents not implemented.')
-    const result = await controller.list({ model, folder, prefix, limit, after }, parameters)
-
-    const headers = {}
-    if (result.last) headers['x-last'] = result.last
-    return responses.json(result.results, headers)
-})
-
-router.get(`/:model/folders`, async (parameters: Parameters) => {
-    if (!parameters.user) return responses.unauthorized
-    const model = parameters.parameters?.model
-    if (!model) return responses.notFound
-
-    const controller = controllers[model] ?? controllers.documents
-    if (!controller.listFolders) throw new Error('List document folders not implemented.')
-    const result = await controller.listFolders({ model }, parameters)
-
-    return responses.json(result)
-})
-
-router.put(`/:model`, async (parameters: Parameters) => {
-    if (!parameters.user || parameters.environment.DEMO) return responses.unauthorized
-
-    const model = parameters.parameters?.model
-    if (!model) return responses.notFound
-
-    const folder = parameters.queries?.folder ?? ''
-    const name = parameters.queries?.name
-    if (!name) return responses.badRequest(`'name' query parameter is required.`)
-
-    const rename = parameters.queries?.rename
-    const move = parameters.queries?.move
-    const value = parameters.body ?? parameters.request.body
-    if (!value) return responses.badRequest('Request body is required.')
-
-    const controller = controllers[model] ?? controllers.documents
-    if (!controller.put) throw new Error('Document update not implemented.')
-    if (!(await controller.put({ model, folder, name, rename, value, modified_by: parameters.user, move }, parameters)))
-        throw new Error('Unable to update document.')
-    return responses.noContent
-})
-
-router.delete(`/:model`, async (parameters: Parameters) => {
-    if (!parameters.user || parameters.environment.DEMO) return responses.unauthorized
-
-    const model = parameters.parameters?.model
-    if (!model) return responses.notFound
-
-    const folder = parameters.queries?.folder ?? ''
-    const name = parameters.queries?.name
-    if (!name) return responses.badRequest(`'name' query parameter is required.`)
-
-    const controller = controllers[model] ?? controllers.documents
-    if (!controller.delete) throw new Error('Document delete not implemented.')
-    if (!(await controller.delete({ model, folder, name }, parameters))) return responses.notFound
-    return responses.noContent
-})
-
-// Files
-
-router.get(`/files/*`, async (parameters: Parameters) => {
-    const name = decodeURI(parameters.parameters['*'] ?? '')
-    if (!name) return responses.notFound
-
-    const result = await parameters.environment.FILES.get(name)
-    if (!result) return responses.notFound
-    // @ts-ignore
-    return new Response(result.body, { headers: { 'content-type': result.customMetadata?.content_type } })
-})
+addVerificationRoutes()
+addSessionsRoutes()
+addFilesRoutes()
+addDocumentsRoutes()
 
 export default {
     async fetch(request: Request, environment: Environment) {
         const url = new URL(request.url)
+        const headers = Object.fromEntries(request.headers.entries())
+
         const match = router.find(request.method as Methods, url.pathname)
-        const [handler] = match.handlers as Endpoint[]
+        const [handler] = match.handlers
         if (handler)
             try {
                 let body = request.body
-                const headers = Object.fromEntries(request.headers.entries())
                 if (headers['content-type'] === 'application/json') body = await request.json()
 
-                let user: string | false = false
-                const ip = headers['cf-connecting-ip'] ?? ''
                 const session = parse(headers?.cookie ?? '')?.session
                 const tokenPrefix = `Bearer `
                 const token =
@@ -291,18 +112,7 @@ export default {
                         ? headers.authorization.slice(tokenPrefix.length)
                         : undefined
 
-                if (session)
-                    user =
-                        (await environment.DB.prepare(
-                            'select sessions.email from sessions inner join users on users.email = sessions.email where sessions.key = ? and sessions.expires_at > ?'
-                        )
-                            .bind(`${session}${ip}`, time())
-                            .first<string>('email')) ?? false
-                else if (token)
-                    user =
-                        (await environment.DB.prepare('select email from users where key = ?').bind(token).first<string>('email')) ?? false
-
-                return await handler({
+                let parameters: Parameters = {
                     request,
                     environment,
                     url,
@@ -310,14 +120,52 @@ export default {
                     queries: Object.fromEntries(Array.from(url.searchParams.entries()).map(([key, value]) => [key, decodeURI(value)])),
                     parameters: match.params,
                     body,
-                    user,
-                    ip,
-                })
+                    cache: {
+                        async get(key) {
+                            const cached = await environment.DB.prepare('select value from cache where key = ?')
+                                .bind(key)
+                                .first<string>('value')
+                            if (cached) return JSON.parse(cached)
+                        },
+                        async put(key, value) {
+                            const existing = await environment.DB.prepare('select rowid from cache where key = ?')
+                                .bind(key)
+                                .first<number>('rowid')
+                            if (existing)
+                                return (
+                                    await environment.DB.prepare('update cache set value = ? where key = ?')
+                                        .bind(JSON.stringify(value), key)
+                                        .run()
+                                ).success
+                            else
+                                return (
+                                    await environment.DB.prepare('insert into cache (key, value) values (?, ?)')
+                                        .bind(key, JSON.stringify(value))
+                                        .run()
+                                ).success
+                        },
+                        async delete(key) {
+                            return (await environment.DB.prepare('delete from cache where key = ?').bind(key).run()).success
+                        },
+                    },
+                    user: false,
+                    session,
+                    token,
+                }
+
+                for (const handler of middleware) await handler(parameters)
+
+                return await handler(parameters)
             } catch (e) {
-                // TODO: Email/Slack error notification
                 console.error(e)
                 return new Response(undefined, { status: 500 })
             }
+
+        // Fallback browser requests to web client for client routing
+        if (headers?.accept?.includes('text/html')) {
+            url.pathname = '/'
+            return environment.ASSETS.fetch(url)
+        }
 
         return responses.notFound
     },

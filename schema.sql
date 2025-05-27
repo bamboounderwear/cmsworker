@@ -20,14 +20,12 @@ create table sessions (
 
 create table documents (
     model text,
-    folder text,
     name text,
     value text,
     modified_at integer,
     modified_by text,
-    primary key (model, folder, name)
+    primary key (model, name)
 );
-create index model_documents on documents (model, name);
 
 create table cache (
     key text primary key,

@@ -1,75 +1,70 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { client, Model } from './app'
 import clsx from 'clsx'
-import { PlusIcon, RightArrow, FolderIcon, CloseIcon, RefreshIcon } from './icons'
-import { useDebouncedCallback } from 'use-debounce'
+import { PlusIcon, RightArrow, CloseIcon, RefreshIcon } from './icons'
 import { noCase } from 'change-case'
 
 export default function Documents({
     models,
     model,
     setModel,
-    folders,
-    folder,
-    setFolder,
     setName,
+    search,
+    setSearch,
 }: {
     models: Model[]
     model: string
     setModel: (value: string) => void
-    folders: string[]
-    folder: string
-    setFolder: (value: string) => void
     setName: (value: string) => void
+    search: string | undefined
+    setSearch: (value: string | undefined) => void
 }) {
     const [loading, setLoading] = useState(true)
-    const [documents, setDocuments] = useState<{ name: string; folder: string; modified_at: number }[]>([])
-    const [prefix, setPrefix] = useState('')
+    const [documents, setDocuments] = useState<{ name: string; modified_at: number }[]>([])
 
     const currentModel = useMemo(() => models.find(({ name }) => name === model), [models, model])
 
     const [last, setLast] = useState<string | null>(null)
-    const fetchDocuments = useDebouncedCallback(
-        useCallback(
-            async (next = false) => {
+    const fetchDocuments = useCallback(
+        async (next = false) => {
+            setLoading(true)
+            const after = next ? last || undefined : undefined
+            if (!next) {
                 setLoading(true)
-                const after = next ? last || undefined : undefined
-                if (!next) {
-                    setLoading(true)
+                setDocuments([])
+            }
+            await client
+                .listDocuments(model, { search: search || undefined, after })
+                .then(({ results, last }) => {
+                    if (next) setDocuments([...documents, ...results])
+                    else setDocuments(results)
+                    setLast(last)
+                })
+                .catch(() => {
                     setDocuments([])
-                }
-                await client
-                    .listDocuments(model, { folder, prefix: prefix || undefined, after })
-                    .then(({ results, last }) => {
-                        if (next) setDocuments([...documents, ...results])
-                        else setDocuments(results)
-                        setLast(last)
-                    })
-                    .catch(() => {
-                        setDocuments([])
-                        alert('Failed to load results.')
-                    })
-                setLoading(false)
-            },
-            [setLoading, setDocuments, model, prefix, last, folder, setLast]
-        ),
-        125
+                    alert('Failed to load results.')
+                })
+            setLoading(false)
+        },
+        [setLoading, setDocuments, model, search, last, setLast]
     )
-    useEffect(() => {
-        fetchDocuments()
-    }, [model, folder, prefix])
 
-    const hasFilter = useMemo(() => folder || prefix, [folder, prefix])
+    useEffect(() => {
+        if (currentModel?.allowList === false) setName(model)
+        else fetchDocuments()
+    }, [model, search])
+
+    const [searchValue, setSearchValue] = useState<string>(search ?? '')
 
     return (
         <div className="flex flex-col md:grid md:grid-cols-[max-content,auto] max-w-[100vw]">
             <div className="p-4">
                 <div className="grid gap-2 lg:min-w-48">
-                    {models.map(({ name, category, icon }) => {
+                    {models.map(({ name, heading, icon, allowList }) => {
                         const selected = model == name
                         return (
                             <>
-                                {category && <h1 className="p-2 ml-2 mt-4 font-normal text-xs text-neutral-400 select-none">{category}</h1>}
+                                {heading && <h1 className="p-2 ml-2 mt-4 font-normal text-xs text-neutral-400 select-none">{heading}</h1>}
                                 <button
                                     key={name}
                                     className={clsx(
@@ -77,10 +72,12 @@ export default function Documents({
                                         selected && 'bg-blue-100 dark:!bg-neutral-600 hover:bg-blue-200 !text-black dark:!text-blue-400'
                                     )}
                                     onClick={() => {
-                                        setPrefix('')
-                                        setFolder('')
+                                        setSearch('')
                                         if (selected) fetchDocuments()
-                                        else setModel(name)
+                                        else {
+                                            setModel(name)
+                                            if (allowList === false) setName(name)
+                                        }
                                     }}
                                     title={`View ${name}`}
                                 >
@@ -90,7 +87,7 @@ export default function Documents({
                                     </span>
                                     <span>{name}</span>
                                 </button>
-                                {currentModel?.allowFolders !== false && selected && !!folders.length && (
+                                {/* TODO: Refactor to use model navigation links {currentModel?.allowFolders !== false && selected && !!folders.length && (
                                     <div className="pl-4 overflow-y-auto max-h-80">
                                         {folders.map(folderName => {
                                             const selected = folderName === folder
@@ -113,13 +110,13 @@ export default function Documents({
                                             )
                                         })}
                                     </div>
-                                )}
+                                )} */}
                             </>
                         )
                     })}
                 </div>
             </div>
-            <div className="flex justify-center p-4">
+            <div className="flex justify-center p-4 max-h-screen overflow-y-auto">
                 <div className={clsx('w-full transition-[margin] h-max flex flex-col gap-4 lg:mx-[10%] 2xl:mx-[25%]')}>
                     <div className="grid md:grid-cols-[max-content,auto] gap-4 items-center">
                         <h1 className="pl-2 text-xl font-semibold flex items-center gap-2">
@@ -134,27 +131,30 @@ export default function Documents({
                             </span>
                         </h1>
                         <div className="flex flex-wrap gap-2 md:justify-end items-center">
-                            {hasFilter && (
+                            {search && (
                                 <button
                                     onClick={() => {
-                                        setFolder('')
-                                        setPrefix('')
+                                        setSearchValue('')
+                                        setSearch('')
                                     }}
-                                    className="px-2 py-1 gap-1 text-xs font-normal bg-neutral-800 hover:bg-neutral-700 text-white"
+                                    className="px-4 font-normal text-xs bg-neutral-800 hover:bg-neutral-700 text-white"
                                     id="clear"
                                     title={`Clear ${model} filter [escape]`}
                                 >
                                     <CloseIcon />
-                                    clear filter
+                                    clear
                                 </button>
                             )}
                             <input
                                 id="search"
                                 className="text-xs w-full md:max-w-64 px-3"
                                 placeholder="search"
-                                value={prefix}
+                                value={searchValue}
                                 onChange={e => {
-                                    setPrefix(e.target.value)
+                                    setSearchValue(e.target.value)
+                                }}
+                                onKeyDown={e => {
+                                    if (e.key === 'Enter') setSearch(searchValue)
                                 }}
                                 onClick={e => {
                                     // @ts-ignore
@@ -182,6 +182,7 @@ export default function Documents({
                         <div className="overflow-auto">
                             <table className="documents">
                                 <colgroup>
+                                    <col />
                                     {Object.keys(documents[0]).map(key => (
                                         <col key={key} />
                                     ))}
@@ -190,8 +191,11 @@ export default function Documents({
 
                                 <thead>
                                     <tr>
+                                        <th></th>
                                         {Object.keys(documents[0]).map(key => (
-                                            <th key={key}>{noCase(key)}</th>
+                                            <th key={key}>
+                                                {key === 'name' && currentModel?.nameAlias ? currentModel?.nameAlias : noCase(key)}
+                                            </th>
                                         ))}
                                         <th></th>
                                     </tr>
@@ -202,17 +206,18 @@ export default function Documents({
                                             key={document.name}
                                             onClick={() => {
                                                 setName(document.name)
-                                                setFolder(document.folder)
                                             }}
+                                            className="cursor-pointer"
                                         >
-                                            {Object.keys(documents[0]).map(key => (
-                                                <td>{document[key]}</td>
-                                            ))}
                                             <td tabIndex={i + 1} role="button" title={`Open ${document.name}`}>
-                                                <div className="flex justify-end">
+                                                <div className="flex">
                                                     <RightArrow />
                                                 </div>
                                             </td>
+                                            {Object.keys(documents[0]).map(key => (
+                                                <td>{document[key]}</td>
+                                            ))}
+                                            <td role="button" title={`Open ${document.name}`}></td>
                                         </tr>
                                     ))}
                                 </tbody>
