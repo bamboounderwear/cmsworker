@@ -1,99 +1,144 @@
-# Worker CMS
+# 🚀 Worker CMS: A Cloudflare Headless CMS
 
-A minimal, headless CMS (with live preview) that can be effortlessly self-hosted on [Cloudflare Workers](https://workers.cloudflare.com/) for free.
+Worker CMS is a minimal, yet powerful, headless Content Management System designed to run seamlessly on [Cloudflare Workers](https://workers.cloudflare.com/), leveraging the global Cloudflare network for speed and scalability. It's built to be effortlessly self-hosted, offering a free tier-friendly solution for managing your content.
 
-[Live demo (read-only) here.](https://cms-worker.shaw-hunter-a.workers.dev/)
+🔗 **[Live demo (read-only) here!](https://cms-worker.shaw-hunter-a.workers.dev/)**
 
-## Features
+## ✨ Features
 
-A full CRUD UI & API for:
+Worker CMS provides a comprehensive suite of tools for content management, all running on the edge:
 
--   :construction_worker: **Users**
-    -   Built-in passwordless & API-token authentication
-    -   Uses [Resend](https://resend.com/) for verification emails
--   :toolbox: **Models**
-    -   Define your data using [JSON-schema](https://json-schema.org/)
-    -   Live-preview data within your own websites/apps
-    -   Build custom controllers to integrate with 3rd party systems (ecommerce, bloging, other 3rd party CMSs)
-    -   Built on [Cloudflare D1](https://www.cloudflare.com/developer-platform/products/d1/)
--   :file_folder: **Files**
-    -   Store any file for hosting
-    -   Built on [Cloudflare R2](https://www.cloudflare.com/developer-platform/products/r2/)
+*   👤 **User Management**:
+    *   Secure passwordless authentication.
+    *   API token support for programmatic access.
+    *   Email verification via [Resend](https://resend.com/) (with console log fallback for development).
+*   🧱 **Data Modeling with JSON Schema**:
+    *   Define your content structures using the flexible [JSON Schema](https://json-schema.org/) standard.
+    *   Data is stored reliably in [Cloudflare D1](https://www.cloudflare.com/developer-platform/products/d1/), Cloudflare's native serverless SQL database.
+*   🗂️ **File Storage**:
+    *   Integrated file management for hosting images, documents, and other assets.
+    *   Utilizes [Cloudflare R2](https://www.cloudflare.com/developer-platform/products/r2/) for scalable and cost-effective object storage.
+*   ✍️ **Rich Markdown Editor**:
+    *   Intuitive content creation with the [MDX Editor](https://mdxeditor.dev/), supporting common formatting, links, and image uploads directly to R2.
+*   👀 **Live Preview**:
+    *   Instantly preview your content changes within your own websites or applications via an iframe and `window.postMessage` communication.
+*   🔌 **Extensible Plugin System**:
+    *   Tailor the CMS to your exact needs by creating or integrating plugins.
+    *   Plugins can:
+        *   Add new data models and associated UI in the admin panel.
+        *   Introduce custom server-side routes and middleware.
+        *   Integrate with third-party services and APIs.
+*   🛍️ **Example: BigCommerce Plugin Included**:
+    *   Demonstrates the power of the plugin system.
+    *   Allows Worker CMS to be installed as an app within a BigCommerce store.
+    *   Handles OAuth2 installation and token management.
+    *   Adds BigCommerce-specific models (e.g., Products, Configuration) to the CMS.
+    *   Provides a foundation for syncing and managing BigCommerce data through Worker CMS.
 
-## Setup
+## 🚀 Getting Started
 
-Download the `.zip` file above (Code > Download Zip).
+### Prerequisites
 
-Create a new git repository & install the dependencies within the unzipped directory by running:
+*   [Node.js](https://nodejs.org/) (LTS version recommended) and npm.
+*   A [Cloudflare account](https://dash.cloudflare.com/sign-up).
 
-```bash
-git init && npm i
-```
+### Setup
 
-Create database tables by running:
+1.  **Clone or Download**:
+    Get the project code:
+    ```bash
+    git clone https://github.com/your-username/cms-worker.git # Or download the ZIP
+    cd cms-worker
+    ```
 
-```bash
-npm run migrate
-```
+2.  **Install Dependencies**:
+    ```bash
+    npm install
+    ```
 
-Start the project at [http://localhost:3000](http://localhost:3000) by running:
+3.  **Database Migration**:
+    Set up your Cloudflare D1 database tables. You'll need `wrangler` logged in (`npx wrangler login`).
+    ```bash
+    npx wrangler d1 migrations apply YOUR_DATABASE_NAME --local # For local development
+    # or
+    # npx wrangler d1 migrations apply YOUR_DATABASE_NAME --remote # For production
+    ```
+    *Ensure your `wrangler.toml` has the correct D1 binding and database ID.*
 
-```bash
-npm start
-```
+4.  **Local Development**:
+    Start the development server (usually on `http://localhost:3000`):
+    ```bash
+    npm start
+    ```
+    During local development, user verification codes will be printed to the console if a Resend API key is not configured.
 
-> Check the local worker logs for user verification during development.
+## 🛠️ Configuration & Development
 
-## Configuration & Development
+### Core Configuration (`wrangler.toml`)
 
-### Schema
+Your `wrangler.toml` file is crucial for binding Cloudflare services:
 
-Models are defined within `src/config.ts`.
+*   **D1 Database**: For storing content and user data.
+*   **R2 Bucket**: For file storage.
+*   **Environment Variables**:
+    *   `RESEND_KEY`: (Optional) Your API key from Resend for sending verification emails.
+    *   `DEMO`: Set to `"true"` to enable read-only demo mode.
+    *   `JWT_SECRET`: A strong secret for signing JWTs (used by core auth).
+    *   For the BigCommerce Plugin:
+        *   `BIGCOMMERCE_CLIENT_ID`: Your BigCommerce app's Client ID.
+        *   `BIGCOMMERCE_CLIENT_SECRET`: Your BigCommerce app's Client Secret.
 
-Model schema accepts a restricted set of [JSON-schema](https://json-schema.org/) using the following rules:
+### Defining Data (Models)
 
--   Model `schema` must be an `object`
--   Objects
-    -   Can have any `string` / `number` / `boolean` / `array` / `object` properties
-    -   Properties can have `title`s and `description`s for annotation
-    -   Properties can also have a `default` value
--   Strings
-    -   Can have optional `'date-time'` or `'markdown'` `format`
--   Arrays
-    -   Can only have an `object` or `{ anyof: ObjectSchema[] }` (for block-style content) `items`
-
-> All document data is **loosely typed**. Object structure is built during editing as-needed to allow for flexibility. Always use optional chaining (?.) to access properties of document data.
+*   Models are defined using JSON Schema. Core models can be structured in `src/models.ts` (or a similar configuration file).
+*   Plugins, like the included BigCommerce plugin (`src/plugins/big-commerce/app.tsx`), can dynamically register their own models with the CMS.
+*   **Schema Rules**:
+    *   The root `schema` must be an `object`.
+    *   Supported property types: `string`, `number`, `boolean`, `array`, `object`.
+    *   Properties can have `title`, `description`, and `default` values.
+    *   Strings can have `format: 'date-time'` or `format: 'markdown'`.
+    *   Arrays typically use `items: { type: 'object', properties: { ... } }` or `items: { anyOf: [...] }` for polymorphic arrays (block-style content).
 
 ### Markdown Editor
 
-String properties with the `format: 'markdown'`, will display using the [MDX Editor](https://mdxeditor.dev/) with a set of plugins for basic formatting, creating links and uploading images.
+String properties with `format: 'markdown'` utilize the MDX Editor, offering a rich text editing experience with support for headings, lists, emphasis, links, and image uploads.
 
 ### Live Preview
 
-Models can implement live-preview by defining a function (`previewURL?: (document: { model: string; name: string; value: any }) => string | undefined`) that returns the preview URL to load within an iframe.
+Models can enable live preview by defining a `previewURL` function in their configuration:
+`previewURL?: (document: { model: string; name: string; value: any }) => string | undefined;`
+This function should return the URL to load in an iframe. The CMS will `postMessage` updates to this iframe as the document changes. See `public/test.html` for a basic JavaScript example.
 
-Real-time changes to the document will be pushed to the iframe using `window.postMessage`. Take a look at `public/test.html` for a plain Javascript example. This can easily be adapted to use React hooks within your own websites / apps.
+### Building Plugins
 
-### Custom Model Controllers
+Plugins are the primary way to extend Worker CMS. A typical plugin might have:
 
-Custom controllers can be defined within the `const controllers` in `worker.ts`, where the key is the model name.
+*   **Server-Side Logic (`server.ts` or similar)**:
+    *   Located within a plugin directory (e.g., `src/plugins/my-plugin/server.ts`).
+    *   Can add new routes to the main worker router (`import { router } from '../../worker'`).
+    *   Can add custom middleware.
+    *   Example: `src/plugins/big-commerce/server.ts` handles BigCommerce installation and API authentication.
+*   **Client-Side Logic (`app.tsx` or similar)**:
+    *   Located within a plugin directory (e.g., `src/plugins/my-plugin/app.tsx`).
+    *   Can register new models with the CMS frontend.
+    *   Can provide custom editor components or UI elements.
+    *   Example: `src/plugins/big-commerce/app.tsx` registers product and configuration models.
 
-Any model name that doesn't match with a key will use the `default` controller, which just persists the document to the D1 database.
+### Key Development Files
 
-This can be used to integrate the CMS with 3rd party systems like ecommerce platforms. Custom controllers can be combined with the default controller to persist/combine data in both 3rd party systems & the D1 database.
+*   **Backend Entry**: `src/worker.ts` (main Cloudflare Worker script).
+*   **Frontend Core**: `src/components/app.tsx` (main React application).
+*   **Models Configuration**: Typically `src/models.ts` for core models.
+*   **Plugin Directory**: `src/plugins/` for individual plugin modules.
 
-### Development
+## ☁️ Deployment
 
-All backend related functionality starts from `worker.ts`.
+1.  **Configure `wrangler.toml`**:
+    Ensure all necessary bindings (D1, R2) and environment variables (see "Core Configuration") are set for your production environment.
 
-All frontend related functionality starts from `components/app.tsx`.
+2.  **Deploy to Cloudflare**:
+    ```bash
+    npm run deploy
+    ```
 
-## Deploying
-
-Update `wrangler.toml` with your Cloudflare account ID, R2 bucket, D1 database ID & Resend API key.
-
-Deploy the CMS to production by running:
-
-```bash
-npm run deploy
-```
+This will publish your Worker CMS instance to your Cloudflare account, making it accessible via the configured routes.
