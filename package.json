@@ -1,33 +1,18 @@
 {
-    "private": "true",
-    "dependencies": {
-        "@mdxeditor/editor": "^3.19.0",
-        "@tsndr/cloudflare-worker-jwt": "^3.1.7",
-        "change-case": "^5.4.4",
-        "cookie": "^1.0.1",
-        "resend": "^4.0.1-alpha.0",
-        "trouter": "^4.0.0",
-        "use-debounce": "^10.0.4"
-    },
-    "devDependencies": {
-        "@cloudflare/workers-types": "^4.20241011.0",
-        "@tailwindcss/typography": "^0.5.15",
-        "@types/react": "^18.3.11",
-        "clsx": "^2.1.1",
-        "esbuild": "^0.24.0",
-        "npm-run-all": "^2.1.0",
-        "react": "^18.3.1",
-        "react-dom": "^18.3.1",
-        "tailwindcss": "^3.4.14",
-        "tschema": "^3.2.0",
-        "wrangler": "^4.16.1"
-    },
-    "scripts": {
-        "start": "run-p watch-client watch-style dev",
-        "watch-client": "esbuild src/client.tsx --bundle --outdir=public --jsx=automatic --watch --minify --sourcemap=external",
-        "watch-style": "npx tailwindcss -i ./src/style.css -o ./public/style.css --watch --minify",
-        "dev": "npx wrangler dev --port 3000",
-        "migrate": "npx wrangler d1 execute DB --local --file=./schema.sql",
-        "deploy": "npx wrangler deploy --minify"
-    }
+  "name": "lightweight-cms",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "d1:init": "wrangler d1 execute my-cms-db --file=./schema.sql"
+  },
+  "dependencies": {
+    "hono": "^4.6.15"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250129.0",
+    "typescript": "^5.6.3",
+    "wrangler": "^3.90.0"
+  }
 }

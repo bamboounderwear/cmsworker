@@ -1,6 +1,0 @@
-node_modules
-public/*.css*
-public/*.js*
-.dev.vars*
-.wrangler
-wrangler.json
