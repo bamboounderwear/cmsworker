@@ -6,15 +6,15 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "my-cms-db",
-      "database_id": "YOUR_D1_ID_HERE"
+      "database_name": "cms-worker-db",
+      "database_id": "9f521146-554d-407c-bfe8-6819d173d939"
     }
   ],
 
   "r2_buckets": [
     {
       "binding": "MEDIA_BUCKET",
-      "bucket_name": "my-cms-media"
+      "bucket_name": "cms-worker-bucket"
     }
   ],
 
