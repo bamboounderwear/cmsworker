@@ -4,73 +4,72 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Admin • lightweight-cms</title>
-  <link rel="stylesheet" href="/assets/style.css" />
-  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body>
-  <div class="container" x-data="cmsAdminHome()" x-init="init()">
-    <div class="card">
-      <div class="nav">
-        <div class="brand">
-          <span class="dot"></span>
+  <div x-data="cmsAdminHome()" x-init="init()">
+    <div>
+      <div>
+        <div>
+          <span></span>
           <div>
-            <div style="font-weight:700;">Admin</div>
-            <div class="small">Pages list (editor opens in a separate page)</div>
+            <div>Admin</div>
+            <div>Pages list (editor opens in a separate page)</div>
           </div>
         </div>
 
-        <div style="display:flex; gap:12px; align-items:center;">
+        <div>
           <a href="/">View site</a>
-          <button style="width:auto;" @click="logout()">Log out</button>
+          <button @click="logout()">Log out</button>
         </div>
       </div>
 
       <template x-if="!isAuthed">
-        <div class="notice">
-          <div style="font-weight:700; margin-bottom:6px;">Login required</div>
-          <div class="small">Uses Basic Auth. Default: admin / admin123</div>
+        <div>
+          <div>Login required</div>
+          <div>Uses Basic Auth. Default: admin / admin123</div>
 
-          <div class="hr"></div>
+          <div></div>
 
-          <div class="row">
+          <div>
             <div>
-              <label class="small">Username</label>
+              <label>Username</label>
               <input x-model="login.username" placeholder="admin" />
             </div>
             <div>
-              <label class="small">Password</label>
+              <label>Password</label>
               <input type="password" x-model="login.password" placeholder="admin123" />
             </div>
           </div>
 
-          <div style="margin-top: 12px;">
+          <div>
             <button @click="doLogin()">Login</button>
           </div>
 
           <template x-if="error">
-            <div style="margin-top:12px; color:#ffb2b2;" x-text="error"></div>
+            <div x-text="error"></div>
           </template>
         </div>
       </template>
 
       <template x-if="isAuthed">
         <div>
-          <div style="display:flex; justify-content: space-between; align-items:center; gap:12px;">
+          <div>
             <div>
-              <div style="font-weight:700;">Pages</div>
-              <div class="small">Open editor to create or modify pages</div>
+              <div>Pages</div>
+              <div>Open editor to create or modify pages</div>
             </div>
-            <button style="width:auto;" @click="openNew()">+ New</button>
+            <button @click="openNew()">+ New</button>
           </div>
 
-          <div class="hr"></div>
+          <div></div>
 
           <template x-if="pages.length === 0">
-            <div class="small">No pages yet.</div>
+            <div>No pages yet.</div>
           </template>
 
           <template x-if="pages.length > 0">
-            <table class="table">
+            <table>
               <thead>
                 <tr>
                   <th>Slug</th>
@@ -88,9 +87,9 @@
                     <td x-text="p.status"></td>
                     <td x-text="formatTs(p.updated_at)"></td>
                     <td>
-                      <div class="actions">
+                      <div>
                         <button @click="openEdit(p.slug)">Open editor</button>
-                        <button @click="delPage(p.slug)" style="background: rgba(255,120,120,0.10); border-color: rgba(255,120,120,0.35);">Delete</button>
+                        <button @click="delPage(p.slug)">Delete</button>
                       </div>
                     </td>
                   </tr>
@@ -100,7 +99,7 @@
           </template>
 
           <template x-if="error">
-            <div style="margin-top:12px; color:#ffb2b2;" x-text="error"></div>
+            <div x-text="error"></div>
           </template>
         </div>
       </template>

@@ -4,175 +4,137 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Editor • lightweight-cms</title>
-  <link rel="stylesheet" href="/assets/style.css" />
-  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-  <style>
-    .split {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 14px;
-    }
-    @media (min-width: 1100px) {
-      .split {
-        grid-template-columns: 1.4fr 0.9fr;
-        align-items: start;
-      }
-    }
-    .preview {
-      height: min(78vh, 900px);
-      border-radius: var(--radius);
-      border: 1px solid var(--border);
-      overflow: hidden;
-      background: rgba(255,255,255,0.02);
-    }
-    .preview iframe {
-      width: 100%;
-      height: 100%;
-      border: 0;
-      background: white;
-    }
-    .topbar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-    .btn-secondary {
-      background: rgba(255,255,255,0.06);
-      border-color: rgba(255,255,255,0.16);
-    }
-  </style>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body>
-  <div class="container" x-data="cmsEditor()" x-init="init()">
-    <div class="card">
-      <div class="topbar">
-        <div class="brand">
-          <span class="dot"></span>
+  <div x-data="cmsEditor()" x-init="init()">
+    <div>
+      <div>
+        <div>
+          <span></span>
           <div>
-            <div style="font-weight:700;">Editor</div>
-            <div class="small">
+            <div>Editor</div>
+            <div>
               Live preview is rendered server-side using the same templates/blocks.
             </div>
           </div>
         </div>
 
-        <div style="display:flex; gap:10px; align-items:center;">
-          <a href="/admin/index.html" class="badge">← Back to list</a>
-          <button class="btn-secondary" style="width:auto;" @click="logout()">Log out</button>
+        <div>
+          <a href="/admin/index.html">← Back to list</a>
+          <button @click="logout()">Log out</button>
         </div>
       </div>
 
       <template x-if="!isAuthed">
-        <div class="notice" style="margin-top:14px;">
-          <div style="font-weight:700; margin-bottom:6px;">Login required</div>
-          <div class="small">Uses Basic Auth. Default: admin / admin123</div>
+        <div>
+          <div>Login required</div>
+          <div>Uses Basic Auth. Default: admin / admin123</div>
 
-          <div class="hr"></div>
+          <div></div>
 
-          <div class="row">
+          <div>
             <div>
-              <label class="small">Username</label>
+              <label>Username</label>
               <input x-model="login.username" placeholder="admin" />
             </div>
             <div>
-              <label class="small">Password</label>
+              <label>Password</label>
               <input type="password" x-model="login.password" placeholder="admin123" />
             </div>
           </div>
 
-          <div style="margin-top: 12px;">
+          <div>
             <button @click="doLogin()">Login</button>
           </div>
 
           <template x-if="error">
-            <div style="margin-top:12px; color:#ffb2b2;" x-text="error"></div>
+            <div x-text="error"></div>
           </template>
         </div>
       </template>
 
       <template x-if="isAuthed">
-        <div style="margin-top: 14px;">
-          <div class="split">
+        <div>
+          <div>
             <!-- Preview -->
             <div>
-              <div style="display:flex; justify-content: space-between; align-items:center; gap:12px; margin-bottom:10px;">
+              <div>
                 <div>
-                  <div style="font-weight:700;">Preview</div>
-                  <div class="small">
+                  <div>Preview</div>
+                  <div>
                     Shows the current draft edits (even if status is draft).
                   </div>
                 </div>
-                <div style="display:flex; gap:10px;">
-                  <button class="btn-secondary" style="width:auto;" @click="refreshPreview(true)">Refresh</button>
-                  <button class="btn-secondary" style="width:auto;" @click="openPublic()">Open public URL</button>
+                <div>
+                  <button @click="refreshPreview(true)">Refresh</button>
+                  <button @click="openPublic()">Open public URL</button>
                 </div>
               </div>
 
-              <div class="preview">
+              <div>
                 <iframe x-ref="frame"></iframe>
               </div>
 
               <template x-if="previewError">
-                <div style="margin-top:12px; color:#ffb2b2;" x-text="previewError"></div>
+                <div x-text="previewError"></div>
               </template>
             </div>
 
             <!-- Editor panel -->
             <div>
-              <div style="display:flex; justify-content: space-between; align-items:center; gap:12px;">
+              <div>
                 <div>
-                  <div style="font-weight:700;">Fields</div>
-                  <div class="small">Template is derived from type</div>
+                  <div>Fields</div>
+                  <div>Template is derived from type</div>
                 </div>
-                <div style="display:flex; gap:10px;">
-                  <button style="width:auto;" @click="save()">Save</button>
+                <div>
+                  <button @click="save()">Save</button>
                 </div>
               </div>
 
-              <div class="hr"></div>
+              <div></div>
 
-              <div class="row">
+              <div>
                 <div>
-                  <label class="small">Slug</label>
+                  <label>Slug</label>
                   <input x-model="editing.slug" @input="onEdit()" placeholder="home" />
-                  <div class="small">Public URL is /&lt;slug&gt; (home = /home)</div>
+                  <div>Public URL is /&lt;slug&gt; (home = /home)</div>
                 </div>
                 <div>
-                  <label class="small">Type</label>
+                  <label>Type</label>
                   <select x-model="editing.type" @change="onTypeChange()">
                     <template x-for="(conf, typeKey) in schema.collections" :key="typeKey">
                       <option :value="typeKey" x-text="conf.label"></option>
                     </template>
                   </select>
-                  <div class="small">
+                  <div>
                     Template: <span x-text="schema.collections?.[editing.type]?.template"></span>
                   </div>
                 </div>
               </div>
 
-              <div style="margin-top:10px;" class="row">
+              <div>
                 <div>
-                  <label class="small">Status</label>
+                  <label>Status</label>
                   <select x-model="editing.status" @change="onEdit()">
                     <option value="draft">draft</option>
                     <option value="published">published</option>
                   </select>
                 </div>
                 <div>
-                  <label class="small">Notes</label>
-                  <div class="small">
+                  <label>Notes</label>
+                  <div>
                     Public route only renders <b>published</b>. Preview here renders your current draft.
                   </div>
                 </div>
               </div>
 
-              <div class="hr"></div>
+              <div></div>
 
               <template x-for="field in (schema.collections?.[editing.type]?.fields ?? [])" :key="field.name">
-                <div style="margin-bottom:12px;">
-                  <label class="small" x-text="field.label || field.name"></label>
+                <div>
+                  <label x-text="field.label || field.name"></label>
 
                   <input
                     x-show="field.type === 'text'"
@@ -191,23 +153,23 @@
                   <div x-show="field.type === 'image'">
                     <input type="file" @change="upload($event, field.name)" />
                     <template x-if="editing.data[field.name]">
-                      <div style="margin-top:10px;">
+                      <div>
                         <img :src="editing.data[field.name]" alt=""
-                             style="width:100%; border-radius:12px; border:1px solid var(--border);" />
+                             />
                       </div>
                     </template>
                   </div>
 
-                  <div class="small" x-show="field.help" x-text="field.help"></div>
+                  <div x-show="field.help" x-text="field.help"></div>
                 </div>
               </template>
 
               <template x-if="saveNotice">
-                <div class="notice" style="margin-top: 12px;" x-text="saveNotice"></div>
+                <div x-text="saveNotice"></div>
               </template>
 
               <template x-if="error">
-                <div style="margin-top:12px; color:#ffb2b2;" x-text="error"></div>
+                <div x-text="error"></div>
               </template>
             </div>
           </div>

@@ -4,29 +4,28 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>{{ hero_title }}</title>
-  <link rel="stylesheet" href="/assets/style.css" />
 </head>
 <body>
-  <div class="container">
+  <div>
     {{> header }}
 
-    <div class="card">
-      <div class="badge"><span class="dot"></span> Landing page</div>
-      <h1 class="h1">{{ hero_title }}</h1>
-      <p class="p">{{ hero_subtitle }}</p>
+    <div>
+      <div><span></span> Landing page</div>
+      <h1>{{ hero_title }}</h1>
+      <p>{{ hero_subtitle }}</p>
 
-      <div class="grid">
-        <div class="card" style="background: rgba(255,255,255,0.02);">
-          <div class="small">Body</div>
-          <div style="line-height:1.7; color: var(--text); white-space: pre-wrap;">{{ body }}</div>
+      <div>
+        <div>
+          <div>Body</div>
+          <div>{{ body }}</div>
         </div>
 
-        <div class="card" style="background: rgba(255,255,255,0.02);">
-          <div class="small">Hero image</div>
-          <div style="margin-top:10px;">
-            <img src="{{ hero_image }}" alt="" style="width:100%; border-radius:12px; border:1px solid var(--border);" />
+        <div>
+          <div>Hero image</div>
+          <div>
+            <img src="{{ hero_image }}" alt="" />
           </div>
-          <div class="small" style="margin-top:10px;">
+          <div>
             Tip: upload an image in Admin to populate this field.
           </div>
         </div>

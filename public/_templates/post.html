@@ -4,21 +4,20 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>{{ title }}</title>
-  <link rel="stylesheet" href="/assets/style.css" />
 </head>
 <body>
-  <div class="container">
+  <div>
     {{> header }}
 
-    <div class="card">
-      <div class="badge"><span class="dot"></span> Blog post</div>
-      <h1 class="h1">{{ title }}</h1>
+    <div>
+      <div><span></span> Blog post</div>
+      <h1>{{ title }}</h1>
 
-      <div style="margin: 14px 0;">
-        <img src="{{ cover_image }}" alt="" style="width:100%; border-radius:12px; border:1px solid var(--border);" />
+      <div>
+        <img src="{{ cover_image }}" alt="" />
       </div>
 
-      <div style="line-height:1.8; white-space: pre-wrap;">{{ body }}</div>
+      <div>{{ body }}</div>
     </div>
 
     {{> footer }}

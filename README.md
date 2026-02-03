@@ -53,3 +53,7 @@ npm run deploy
 - Pages list: `/admin/index.html`
 - Editor: `/admin/editor.html?slug=home` or click “Open editor” from the list.
 - Live preview uses `/api/render` and renders drafts without publishing.
+
+
+## Styling
+All CSS and class-based styling has been removed as requested. The UI is unstyled HTML.
