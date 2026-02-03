@@ -112,6 +112,63 @@ app.get("/api/pages/:slug", async (c) => {
   });
 });
 
+/**
+ * Render helpers for the editor page
+ * - GET /api/render/:slug renders an existing page (draft or published) for preview
+ * - POST /api/render renders unsaved edits (type + data) for live preview
+ */
+app.get("/api/render/:slug", async (c) => {
+  const slug = c.req.param("slug");
+
+  const row = await c.env.DB.prepare(
+    `SELECT slug, type, status, data
+     FROM pages
+     WHERE slug = ?
+     LIMIT 1`
+  ).bind(slug).first<{
+    slug: string;
+    type: string;
+    status: string;
+    data: string;
+  }>();
+
+  if (!row) return c.text("Not Found", 404);
+
+  const collection = collections[row.type];
+  if (!collection) return c.text("Invalid page type", 500);
+
+  const pageData = JSON.parse(row.data || "{}");
+
+  const html = await renderPageHtml(c.env, {
+    templateFile: collection.template,
+    data: pageData
+  });
+
+  return c.html(html);
+});
+
+app.post("/api/render", async (c) => {
+  const body = await c.req.json<{
+    type: string;
+    data?: Record<string, any>;
+  }>();
+
+  const type = (body.type || "").trim();
+  if (!type) return c.json({ error: "ValidationError", message: "type is required" }, 400);
+
+  const collection = collections[type];
+  if (!collection) return c.json({ error: "ValidationError", message: "invalid type" }, 400);
+
+  const data = body.data ?? {};
+
+  const html = await renderPageHtml(c.env, {
+    templateFile: collection.template,
+    data
+  });
+
+  return c.html(html);
+});
+
 // Create/update page (UPSERT + updated_at)
 app.post("/api/pages", async (c) => {
   const body = await c.req.json<{

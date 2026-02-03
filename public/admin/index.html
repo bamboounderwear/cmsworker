@@ -8,14 +8,14 @@
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body>
-  <div class="container" x-data="cmsAdmin()" x-init="init()">
+  <div class="container" x-data="cmsAdminHome()" x-init="init()">
     <div class="card">
       <div class="nav">
         <div class="brand">
           <span class="dot"></span>
           <div>
             <div style="font-weight:700;">Admin</div>
-            <div class="small">Manage pages (D1) + media (R2)</div>
+            <div class="small">Pages list (editor opens in a separate page)</div>
           </div>
         </div>
 
@@ -55,166 +55,73 @@
 
       <template x-if="isAuthed">
         <div>
-          <div class="grid">
-            <div class="card" style="background: rgba(255,255,255,0.02);">
-              <div style="display:flex; justify-content: space-between; align-items:center; gap:12px;">
-                <div>
-                  <div style="font-weight:700;">Pages</div>
-                  <div class="small">Create, edit, publish</div>
-                </div>
-                <button style="width:auto;" @click="newPage()">+ New</button>
-              </div>
-
-              <div class="hr"></div>
-
-              <template x-if="pages.length === 0">
-                <div class="small">No pages yet.</div>
-              </template>
-
-              <template x-if="pages.length > 0">
-                <table class="table">
-                  <thead>
-                    <tr>
-                      <th>Slug</th>
-                      <th>Type</th>
-                      <th>Status</th>
-                      <th>Updated</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <template x-for="p in pages" :key="p.slug">
-                      <tr>
-                        <td><a :href="'/' + p.slug" target="_blank" x-text="'/' + p.slug"></a></td>
-                        <td x-text="p.type"></td>
-                        <td x-text="p.status"></td>
-                        <td x-text="formatTs(p.updated_at)"></td>
-                        <td>
-                          <div class="actions">
-                            <button @click="loadPage(p.slug)">Edit</button>
-                            <button @click="delPage(p.slug)" style="background: rgba(255,120,120,0.10); border-color: rgba(255,120,120,0.35);">Delete</button>
-                          </div>
-                        </td>
-                      </tr>
-                    </template>
-                  </tbody>
-                </table>
-              </template>
+          <div style="display:flex; justify-content: space-between; align-items:center; gap:12px;">
+            <div>
+              <div style="font-weight:700;">Pages</div>
+              <div class="small">Open editor to create or modify pages</div>
             </div>
-
-            <div class="card" style="background: rgba(255,255,255,0.02);">
-              <div style="font-weight:700;">Editor</div>
-              <div class="small">Template is derived from type (collections config)</div>
-
-              <div class="hr"></div>
-
-              <div class="row">
-                <div>
-                  <label class="small">Slug</label>
-                  <input x-model="editing.slug" placeholder="home" />
-                  <div class="small">URL will be /&lt;slug&gt; (use "home" for homepage)</div>
-                </div>
-
-                <div>
-                  <label class="small">Type</label>
-                  <select x-model="editing.type" @change="ensureDataShape()">
-                    <template x-for="(conf, typeKey) in schema.collections" :key="typeKey">
-                      <option :value="typeKey" x-text="conf.label"></option>
-                    </template>
-                  </select>
-                  <div class="small">Template: <span x-text="schema.collections?.[editing.type]?.template"></span></div>
-                </div>
-              </div>
-
-              <div style="margin-top:10px;" class="row">
-                <div>
-                  <label class="small">Status</label>
-                  <select x-model="editing.status">
-                    <option value="draft">draft</option>
-                    <option value="published">published</option>
-                  </select>
-                </div>
-                <div>
-                  <label class="small">Quick actions</label>
-                  <div class="actions">
-                    <button @click="save()">Save</button>
-                    <button @click="openPreview()" style="width:auto;">Preview</button>
-                  </div>
-                </div>
-              </div>
-
-              <div class="hr"></div>
-
-              <template x-if="!editing.type">
-                <div class="small">Choose a type to edit fields.</div>
-              </template>
-
-              <template x-for="field in (schema.collections?.[editing.type]?.fields ?? [])" :key="field.name">
-                <div style="margin-bottom:12px;">
-                  <label class="small" x-text="field.label || field.name"></label>
-
-                  <input
-                    x-show="field.type === 'text'"
-                    x-model="editing.data[field.name]"
-                    :placeholder="field.name"
-                  />
-
-                  <textarea
-                    x-show="field.type === 'richtext'"
-                    x-model="editing.data[field.name]"
-                    :placeholder="field.name"
-                  ></textarea>
-
-                  <div x-show="field.type === 'image'">
-                    <input type="file" @change="upload($event, field.name)" />
-                    <template x-if="editing.data[field.name]">
-                      <div style="margin-top:10px;">
-                        <img :src="editing.data[field.name]" alt=""
-                             style="width:100%; border-radius:12px; border:1px solid var(--border);" />
-                      </div>
-                    </template>
-                  </div>
-
-                  <div class="small" x-show="field.help" x-text="field.help"></div>
-                </div>
-              </template>
-
-              <template x-if="saveNotice">
-                <div class="notice" style="margin-top: 12px;" x-text="saveNotice"></div>
-              </template>
-
-              <template x-if="error">
-                <div style="margin-top:12px; color:#ffb2b2;" x-text="error"></div>
-              </template>
-            </div>
+            <button style="width:auto;" @click="openNew()">+ New</button>
           </div>
+
+          <div class="hr"></div>
+
+          <template x-if="pages.length === 0">
+            <div class="small">No pages yet.</div>
+          </template>
+
+          <template x-if="pages.length > 0">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Slug</th>
+                  <th>Type</th>
+                  <th>Status</th>
+                  <th>Updated</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="p in pages" :key="p.slug">
+                  <tr>
+                    <td><a :href="'/' + p.slug" target="_blank" x-text="'/' + p.slug"></a></td>
+                    <td x-text="p.type"></td>
+                    <td x-text="p.status"></td>
+                    <td x-text="formatTs(p.updated_at)"></td>
+                    <td>
+                      <div class="actions">
+                        <button @click="openEdit(p.slug)">Open editor</button>
+                        <button @click="delPage(p.slug)" style="background: rgba(255,120,120,0.10); border-color: rgba(255,120,120,0.35);">Delete</button>
+                      </div>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </template>
+
+          <template x-if="error">
+            <div style="margin-top:12px; color:#ffb2b2;" x-text="error"></div>
+          </template>
         </div>
       </template>
     </div>
   </div>
 
 <script>
-function cmsAdmin() {
+function cmsAdminHome() {
   return {
-    schema: { collections: {} },
     pages: [],
-
     isAuthed: false,
     authHeader: "",
     login: { username: "admin", password: "admin123" },
-
-    editing: { slug: "home", type: "landing", status: "draft", data: {} },
-
     error: "",
-    saveNotice: "",
 
     async init() {
-      // Restore saved auth header (Basic ...)
       const saved = localStorage.getItem("cms_auth_header");
       if (saved) {
         this.authHeader = saved;
         this.isAuthed = true;
-        await this.loadSchemaAndPages();
+        await this.refreshPages();
       }
     },
 
@@ -224,11 +131,10 @@ function cmsAdmin() {
 
     async doLogin() {
       this.error = "";
-      this.saveNotice = "";
       this.authHeader = this.buildBasicHeader(this.login.username, this.login.password);
 
-      // Probe auth by calling config
-      const ok = await this.loadSchemaAndPages();
+      // Probe auth by listing pages
+      const ok = await this.refreshPages(true);
       if (!ok) {
         this.isAuthed = false;
         this.authHeader = "";
@@ -244,137 +150,51 @@ function cmsAdmin() {
       this.isAuthed = false;
       this.authHeader = "";
       this.pages = [];
-      this.schema = { collections: {} };
       this.error = "";
-      this.saveNotice = "";
     },
 
     async api(url, opts = {}) {
       const headers = Object.assign({}, opts.headers || {}, {
         "Authorization": this.authHeader
       });
-
       return fetch(url, Object.assign({}, opts, { headers }));
     },
 
-    async loadSchemaAndPages() {
+    async refreshPages(isProbe = false) {
       try {
-        const confRes = await this.api("/api/config");
-        if (!confRes.ok) {
-          this.error = "Unauthorized. Check username/password.";
+        const res = await this.api("/api/pages");
+        if (!res.ok) {
+          if (isProbe) this.error = "Unauthorized. Check username/password.";
           return false;
         }
-        this.schema = await confRes.json();
-
-        await this.refreshPages();
-        this.ensureDataShape();
+        const data = await res.json();
+        this.pages = data.pages || [];
         this.error = "";
         return true;
       } catch (e) {
-        this.error = "Failed to load admin data.";
+        this.error = "Failed to load pages.";
         return false;
       }
     },
 
-    async refreshPages() {
-      const res = await this.api("/api/pages");
-      if (!res.ok) return;
-      const data = await res.json();
-      this.pages = data.pages || [];
+    openEdit(slug) {
+      window.location.href = "/admin/editor.html?slug=" + encodeURIComponent(slug);
     },
 
-    ensureDataShape() {
-      const fields = (this.schema.collections?.[this.editing.type]?.fields || []);
-      if (!this.editing.data) this.editing.data = {};
-      for (const f of fields) {
-        if (this.editing.data[f.name] === undefined) this.editing.data[f.name] = "";
-      }
-    },
-
-    newPage() {
-      this.error = "";
-      this.saveNotice = "";
-      this.editing = { slug: "", type: Object.keys(this.schema.collections)[0] || "landing", status: "draft", data: {} };
-      this.ensureDataShape();
-    },
-
-    async loadPage(slug) {
-      this.error = "";
-      this.saveNotice = "";
-      const res = await this.api("/api/pages/" + encodeURIComponent(slug));
-      if (!res.ok) {
-        this.error = "Failed to load page.";
-        return;
-      }
-      const p = await res.json();
-      this.editing = {
-        slug: p.slug,
-        type: p.type,
-        status: p.status,
-        data: p.data || {}
-      };
-      this.ensureDataShape();
-    },
-
-    async save() {
-      this.error = "";
-      this.saveNotice = "";
-      try {
-        const res = await this.api("/api/pages", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(this.editing)
-        });
-
-        const payload = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          this.error = payload.message || "Save failed.";
-          return;
-        }
-
-        this.saveNotice = "Saved!";
-        await this.refreshPages();
-      } catch (e) {
-        this.error = "Save failed.";
-      }
+    openNew() {
+      // Default to landing; editor lets you change type
+      window.location.href = "/admin/editor.html?new=1&type=landing";
     },
 
     async delPage(slug) {
       if (!confirm("Delete /" + slug + "?")) return;
       this.error = "";
-      this.saveNotice = "";
       const res = await this.api("/api/pages/" + encodeURIComponent(slug), { method: "DELETE" });
       if (!res.ok) {
         this.error = "Delete failed.";
         return;
       }
       await this.refreshPages();
-      if (this.editing.slug === slug) this.newPage();
-    },
-
-    openPreview() {
-      const slug = (this.editing.slug || "").trim();
-      if (!slug) return alert("Enter a slug first.");
-      window.open("/" + slug, "_blank");
-    },
-
-    async upload(evt, fieldName) {
-      this.error = "";
-      this.saveNotice = "";
-      const file = evt.target.files?.[0];
-      if (!file) return;
-
-      const form = new FormData();
-      form.append("file", file);
-
-      const res = await this.api("/api/upload", { method: "PUT", body: form });
-      if (!res.ok) {
-        this.error = "Upload failed.";
-        return;
-      }
-
-      const { url } = await res.json();
-      this.editing.data[fieldName] = url;
     },
 
     formatTs(ts) {

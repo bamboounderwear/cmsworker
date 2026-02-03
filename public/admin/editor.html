@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Editor • lightweight-cms</title>
+  <link rel="stylesheet" href="/assets/style.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    .split {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 14px;
+    }
+    @media (min-width: 1100px) {
+      .split {
+        grid-template-columns: 1.4fr 0.9fr;
+        align-items: start;
+      }
+    }
+    .preview {
+      height: min(78vh, 900px);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      overflow: hidden;
+      background: rgba(255,255,255,0.02);
+    }
+    .preview iframe {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      background: white;
+    }
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .btn-secondary {
+      background: rgba(255,255,255,0.06);
+      border-color: rgba(255,255,255,0.16);
+    }
+  </style>
+</head>
+<body>
+  <div class="container" x-data="cmsEditor()" x-init="init()">
+    <div class="card">
+      <div class="topbar">
+        <div class="brand">
+          <span class="dot"></span>
+          <div>
+            <div style="font-weight:700;">Editor</div>
+            <div class="small">
+              Live preview is rendered server-side using the same templates/blocks.
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex; gap:10px; align-items:center;">
+          <a href="/admin/index.html" class="badge">← Back to list</a>
+          <button class="btn-secondary" style="width:auto;" @click="logout()">Log out</button>
+        </div>
+      </div>
+
+      <template x-if="!isAuthed">
+        <div class="notice" style="margin-top:14px;">
+          <div style="font-weight:700; margin-bottom:6px;">Login required</div>
+          <div class="small">Uses Basic Auth. Default: admin / admin123</div>
+
+          <div class="hr"></div>
+
+          <div class="row">
+            <div>
+              <label class="small">Username</label>
+              <input x-model="login.username" placeholder="admin" />
+            </div>
+            <div>
+              <label class="small">Password</label>
+              <input type="password" x-model="login.password" placeholder="admin123" />
+            </div>
+          </div>
+
+          <div style="margin-top: 12px;">
+            <button @click="doLogin()">Login</button>
+          </div>
+
+          <template x-if="error">
+            <div style="margin-top:12px; color:#ffb2b2;" x-text="error"></div>
+          </template>
+        </div>
+      </template>
+
+      <template x-if="isAuthed">
+        <div style="margin-top: 14px;">
+          <div class="split">
+            <!-- Preview -->
+            <div>
+              <div style="display:flex; justify-content: space-between; align-items:center; gap:12px; margin-bottom:10px;">
+                <div>
+                  <div style="font-weight:700;">Preview</div>
+                  <div class="small">
+                    Shows the current draft edits (even if status is draft).
+                  </div>
+                </div>
+                <div style="display:flex; gap:10px;">
+                  <button class="btn-secondary" style="width:auto;" @click="refreshPreview(true)">Refresh</button>
+                  <button class="btn-secondary" style="width:auto;" @click="openPublic()">Open public URL</button>
+                </div>
+              </div>
+
+              <div class="preview">
+                <iframe x-ref="frame"></iframe>
+              </div>
+
+              <template x-if="previewError">
+                <div style="margin-top:12px; color:#ffb2b2;" x-text="previewError"></div>
+              </template>
+            </div>
+
+            <!-- Editor panel -->
+            <div>
+              <div style="display:flex; justify-content: space-between; align-items:center; gap:12px;">
+                <div>
+                  <div style="font-weight:700;">Fields</div>
+                  <div class="small">Template is derived from type</div>
+                </div>
+                <div style="display:flex; gap:10px;">
+                  <button style="width:auto;" @click="save()">Save</button>
+                </div>
+              </div>
+
+              <div class="hr"></div>
+
+              <div class="row">
+                <div>
+                  <label class="small">Slug</label>
+                  <input x-model="editing.slug" @input="onEdit()" placeholder="home" />
+                  <div class="small">Public URL is /&lt;slug&gt; (home = /home)</div>
+                </div>
+                <div>
+                  <label class="small">Type</label>
+                  <select x-model="editing.type" @change="onTypeChange()">
+                    <template x-for="(conf, typeKey) in schema.collections" :key="typeKey">
+                      <option :value="typeKey" x-text="conf.label"></option>
+                    </template>
+                  </select>
+                  <div class="small">
+                    Template: <span x-text="schema.collections?.[editing.type]?.template"></span>
+                  </div>
+                </div>
+              </div>
+
+              <div style="margin-top:10px;" class="row">
+                <div>
+                  <label class="small">Status</label>
+                  <select x-model="editing.status" @change="onEdit()">
+                    <option value="draft">draft</option>
+                    <option value="published">published</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="small">Notes</label>
+                  <div class="small">
+                    Public route only renders <b>published</b>. Preview here renders your current draft.
+                  </div>
+                </div>
+              </div>
+
+              <div class="hr"></div>
+
+              <template x-for="field in (schema.collections?.[editing.type]?.fields ?? [])" :key="field.name">
+                <div style="margin-bottom:12px;">
+                  <label class="small" x-text="field.label || field.name"></label>
+
+                  <input
+                    x-show="field.type === 'text'"
+                    x-model="editing.data[field.name]"
+                    @input="onEdit()"
+                    :placeholder="field.name"
+                  />
+
+                  <textarea
+                    x-show="field.type === 'richtext'"
+                    x-model="editing.data[field.name]"
+                    @input="onEdit()"
+                    :placeholder="field.name"
+                  ></textarea>
+
+                  <div x-show="field.type === 'image'">
+                    <input type="file" @change="upload($event, field.name)" />
+                    <template x-if="editing.data[field.name]">
+                      <div style="margin-top:10px;">
+                        <img :src="editing.data[field.name]" alt=""
+                             style="width:100%; border-radius:12px; border:1px solid var(--border);" />
+                      </div>
+                    </template>
+                  </div>
+
+                  <div class="small" x-show="field.help" x-text="field.help"></div>
+                </div>
+              </template>
+
+              <template x-if="saveNotice">
+                <div class="notice" style="margin-top: 12px;" x-text="saveNotice"></div>
+              </template>
+
+              <template x-if="error">
+                <div style="margin-top:12px; color:#ffb2b2;" x-text="error"></div>
+              </template>
+            </div>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+<script>
+function cmsEditor() {
+  return {
+    schema: { collections: {} },
+
+    isAuthed: false,
+    authHeader: "",
+    login: { username: "admin", password: "admin123" },
+
+    editing: { slug: "home", type: "landing", status: "draft", data: {} },
+
+    error: "",
+    saveNotice: "",
+    previewError: "",
+
+    _debounce: null,
+
+    get qs() {
+      return new URLSearchParams(window.location.search);
+    },
+
+    async init() {
+      const saved = localStorage.getItem("cms_auth_header");
+      if (saved) {
+        this.authHeader = saved;
+        this.isAuthed = true;
+        const ok = await this.loadSchema();
+        if (ok) await this.loadInitialPageFromQuery();
+        return;
+      }
+      // If not authed, show login
+    },
+
+    buildBasicHeader(username, password) {
+      return "Basic " + btoa(username + ":" + password);
+    },
+
+    async doLogin() {
+      this.error = "";
+      this.saveNotice = "";
+      this.authHeader = this.buildBasicHeader(this.login.username, this.login.password);
+
+      const ok = await this.loadSchema(true);
+      if (!ok) {
+        this.isAuthed = false;
+        this.authHeader = "";
+        return;
+      }
+
+      localStorage.setItem("cms_auth_header", this.authHeader);
+      this.isAuthed = true;
+
+      await this.loadInitialPageFromQuery();
+    },
+
+    logout() {
+      localStorage.removeItem("cms_auth_header");
+      this.isAuthed = false;
+      this.authHeader = "";
+      this.error = "";
+      this.saveNotice = "";
+      this.previewError = "";
+    },
+
+    async api(url, opts = {}) {
+      const headers = Object.assign({}, opts.headers || {}, {
+        "Authorization": this.authHeader
+      });
+      return fetch(url, Object.assign({}, opts, { headers }));
+    },
+
+    async loadSchema(isProbe = false) {
+      try {
+        const res = await this.api("/api/config");
+        if (!res.ok) {
+          if (isProbe) this.error = "Unauthorized. Check username/password.";
+          return false;
+        }
+        this.schema = await res.json();
+        this.error = "";
+        return true;
+      } catch (e) {
+        this.error = "Failed to load schema.";
+        return false;
+      }
+    },
+
+    ensureDataShape() {
+      const fields = (this.schema.collections?.[this.editing.type]?.fields || []);
+      if (!this.editing.data) this.editing.data = {};
+      for (const f of fields) {
+        if (this.editing.data[f.name] === undefined) this.editing.data[f.name] = "";
+      }
+    },
+
+    async loadInitialPageFromQuery() {
+      const slug = this.qs.get("slug");
+      const isNew = this.qs.get("new") === "1";
+      const type = this.qs.get("type");
+
+      if (slug) {
+        // Load from DB
+        const res = await this.api("/api/pages/" + encodeURIComponent(slug));
+        if (!res.ok) {
+          this.error = "Failed to load page.";
+          this.editing = { slug, type: type || "landing", status: "draft", data: {} };
+          this.ensureDataShape();
+          await this.refreshPreview(true);
+          return;
+        }
+        const p = await res.json();
+        this.editing = {
+          slug: p.slug,
+          type: p.type,
+          status: p.status,
+          data: p.data || {}
+        };
+        this.ensureDataShape();
+        await this.refreshPreview(true);
+        return;
+      }
+
+      // New page
+      this.editing = { slug: "", type: type || "landing", status: "draft", data: {} };
+      this.ensureDataShape();
+      await this.refreshPreview(true);
+    },
+
+    onTypeChange() {
+      this.ensureDataShape();
+      this.onEdit(true);
+    },
+
+    onEdit(force = false) {
+      this.error = "";
+      this.saveNotice = "";
+      // Debounce preview refresh
+      if (this._debounce) clearTimeout(this._debounce);
+      this._debounce = setTimeout(() => this.refreshPreview(force), 250);
+    },
+
+    async refreshPreview(force = false) {
+      this.previewError = "";
+      try {
+        // If we have a slug that exists in DB and we are not forcing live body preview,
+        // still render from current editing data to reflect unsaved changes.
+        const res = await this.api("/api/render", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: this.editing.type, data: this.editing.data })
+        });
+
+        if (!res.ok) {
+          const txt = await res.text().catch(() => "");
+          this.previewError = "Preview failed. " + txt;
+          return;
+        }
+
+        const html = await res.text();
+        // Use srcdoc to avoid auth headers in iframe requests
+        this.$refs.frame.srcdoc = html;
+      } catch (e) {
+        this.previewError = "Preview failed.";
+      }
+    },
+
+    async save() {
+      this.error = "";
+      this.saveNotice = "";
+      try {
+        const res = await this.api("/api/pages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(this.editing)
+        });
+
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          this.error = payload.message || "Save failed.";
+          return;
+        }
+
+        this.saveNotice = "Saved!";
+        // Update URL if this was a new page
+        const slug = (this.editing.slug || "").trim();
+        if (slug && !this.qs.get("slug")) {
+          const u = new URL(window.location.href);
+          u.searchParams.set("slug", slug);
+          u.searchParams.delete("new");
+          window.history.replaceState({}, "", u.toString());
+        }
+
+        await this.refreshPreview(true);
+      } catch (e) {
+        this.error = "Save failed.";
+      }
+    },
+
+    async upload(evt, fieldName) {
+      this.error = "";
+      this.saveNotice = "";
+      const file = evt.target.files?.[0];
+      if (!file) return;
+
+      const form = new FormData();
+      form.append("file", file);
+
+      const res = await this.api("/api/upload", { method: "PUT", body: form });
+      if (!res.ok) {
+        this.error = "Upload failed.";
+        return;
+      }
+
+      const { url } = await res.json();
+      this.editing.data[fieldName] = url;
+      this.onEdit(true);
+    },
+
+    openPublic() {
+      const slug = (this.editing.slug || "").trim();
+      if (!slug) return alert("Enter a slug first.");
+      window.open("/" + slug, "_blank");
+    }
+  }
+}
+</script>
+</body>
+</html>

@@ -47,3 +47,9 @@ npm run deploy
 ## Notes
 - Password hashing is SHA-256 (as requested). This is **not recommended** for production.
 - Templates/blocks are stored in `public/_templates` and `public/_blocks` and are fetched server-side via `ASSETS`.
+
+
+## Editor page
+- Pages list: `/admin/index.html`
+- Editor: `/admin/editor.html?slug=home` or click “Open editor” from the list.
+- Live preview uses `/api/render` and renders drafts without publishing.
